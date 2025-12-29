@@ -19,17 +19,44 @@ class Model:
 
 
 class LinearModel(Model):
-    def __init__(self):
+    def __init__(self, feature_in: list[int]):
+        assert isinstance(feature_in, list)
         self.model: sklearn.linear_model.LinearRegression = sklearn.linear_model.LinearRegression()
+        self.feature_in: list[int] = feature_in
+        feature: int = 0
+        for f in feature_in:
+            feature += 1 if f == 0 else f
+        self.feature: int = feature
+
+    def preprocess(self, x: np.ndarray) -> np.ndarray:
+        assert isinstance(x, np.ndarray)
+
+        if len(x.shape) == 1:
+            x = np.expand_dims(x, 0)
+
+        expanded_x: np.ndarray = np.zeros((x.shape[0], self.feature),
+                                          dtype=np.float32)
+        idx: int = 0
+        for i, f in enumerate(self.feature_in):
+            if f == 0:
+                expanded_x[:, idx] = x[:, i]
+                idx += 1
+            else:
+                x_idx: np.ndarray = x[:, i].astype(np.int64)
+                expanded_x[:, idx + x_idx] = 1
+                idx += f
+
+        return expanded_x
 
     def train(self, x: np.ndarray, y: np.ndarray) -> None:
         assert isinstance(x, np.ndarray)
         assert isinstance(y, np.ndarray)
-        self.model.fit(x, y)
+
+        self.model.fit(self.preprocess(x), y)
 
     def predict(self, x: np.ndarray) -> np.ndarray:
         assert isinstance(x, np.ndarray)
-        return self.model.predict(x)
+        return self.model.predict(self.preprocess(x))
 
 
 class TorchModel(Model):
@@ -175,7 +202,6 @@ class MixedVector(nn.Module):
         for d in self.dim:
             if d > 0:
                 self.emb.append(nn.Embedding(d, 1))
-                print(self.emb[-1])
 
     def forward(self, x: torch.Tensor) -> torch.Tensor:
         assert isinstance(x, torch.Tensor)
@@ -263,7 +289,7 @@ def eval(model: Model, x: np.ndarray, y: np.ndarray
     error: list[Any] = []
     for x_i, y_i in zip(x, y):
         y_p = model.predict(x_i)
-        print(y_p)
+        print(f"actual: {y_i}, predict: {y_p}, abs(diff): {abs(y_i - y_p)}")
         diff = y_i - y_p
         error.append(diff ** 2 if abs(diff) < 1 else abs(diff))
     error_ndarray: np.ndarray = np.array(error)
@@ -314,7 +340,7 @@ def main(args: Namespace) -> int:
 
     # should replace appropriate name instead of "out"
     df_out: pd.Series = df_orig[args.y_data]
-    df: pd.DataFrame = df_orig
+    df: pd.DataFrame = df_orig.copy()
     df.pop(args.y_data)
 
     if args.year is not None:
@@ -333,11 +359,7 @@ def main(args: Namespace) -> int:
             df.drop(df[df[d] == 0].index)
             df.pop(d)
 
-    try:
-        df.pop("readme")  # (0, 0)
-    except:
-        pass
-
+    print(df)
     x_train_df, x_test_df, y_train_df, y_test_df = sklearn.model_selection.train_test_split(
             df, df_out, test_size=args.test_size)
     assert isinstance(x_train_df, pd.DataFrame)
@@ -359,8 +381,8 @@ def main(args: Namespace) -> int:
             feature_in.append(0)
 
     model: Model = None
-    if args.model_type == "linear":
-        model = LinearModel()
+    if args.model_type == "Linear":
+        model = LinearModel(feature_in)
     elif args.model_type == "SigmoidUnit":
         model = TorchModel(
                 SigmoidUnitModel(

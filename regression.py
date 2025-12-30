@@ -269,7 +269,7 @@ class SigmoidUnitLinearModel(SigmoidUnitModel):
     def forward(self, x: torch.Tensor) -> torch.Tensor:
         assert isinstance(x, torch.Tensor)
         return self.y_max * (1 - torch.prod(
-                self.dropout(self.su(x) * F.softmax(self.sl(x), dim=-1)), dim=-1))
+                self.dropout(self.su(x) * F.sigmoid(self.sl(x), dim=-1)), dim=-1))
 
 
 def eval(model: Model, x: np.ndarray, y: np.ndarray
@@ -329,7 +329,6 @@ def main(args: Namespace) -> int:
     out is what model predicts.
     """
     df_orig: pd.DataFrame = pd.read_csv(args.data, header=0, index_col=0)
-    df_orig.fillna(0)  # maybe better way
 
     for ex in args.exclude:
         df_orig.pop(ex)
@@ -337,6 +336,8 @@ def main(args: Namespace) -> int:
     if args.drop_game is not None:
         for game in args.drop_game:
             df_orig.drop(game)
+
+    df_orig.dropna(subset=[args.y_data])
 
     # should replace appropriate name instead of "out"
     df_out: pd.Series = df_orig[args.y_data]

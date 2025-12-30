@@ -18,10 +18,10 @@ $ python regression.py [...]
 
 与えられたデータを用いて回帰します。
 
-最もシンプルな使用法は
+例: data.csvを用いて列"y"を予測するモデルを作る。
 
 ```
-$ python regression.py data.csv
+$ python regression.py data.csv y
 ```
 
 ## カテゴリカルデータ
@@ -31,13 +31,13 @@ $ python regression.py data.csv
 例: typeがカテゴリカルデータ
 
 ```
-$ python regression.py --embedding type data.csv
+$ python regression.py --embedding type data.csv y
 ```
 
 例: type1, type2がカテゴリカルデータ
 
 ```
-$ python regression.py --embedding type1 --embedding type2 data.csv
+$ python regression.py --embedding type1 --embedding type2 data.csv y
 ```
 
 >
@@ -45,6 +45,14 @@ $ python regression.py --embedding type1 --embedding type2 data.csv
 >
 
 ## データの制御
+
+--test_sizeを用いてテストデータのサイズを指定します。
+
+例: テストデータを50%に設定
+
+```
+$ python regression.py --test_size 0.5 data.csv y
+```
 
 ### 不要なデータの除去
 
@@ -55,7 +63,7 @@ $ python regression.py --embedding type1 --embedding type2 data.csv
 例: game1を削除
 
 ```
-$ python regression.py --drop_game game1 data.csv
+$ python regression.py --drop_game game1 data.csv y
 ```
 
 --yearを用いて特定年のみを考慮するようにします。
@@ -63,13 +71,13 @@ $ python regression.py --drop_game game1 data.csv
 例: 24年のみを使用
 
 ```
-python regression.py --year 24 data.csv
+python regression.py --year 24 data.csv y
 ```
 
 例: 23, 24年を使用
 
 ```
-$ python regression.py --year 23 --year 24 data.csv
+$ python regression.py --year 23 --year 24 data.csv y
 ```
 
 >
@@ -83,13 +91,13 @@ $ python regression.py --year 23 --year 24 data.csv
 例: is_validが1のデータを削除
 
 ```
-$ python regression.py --drop_if is_valid data.csv
+$ python regression.py --drop_if is_valid data.csv y
 ```
 
 例: is_validが0のデータを削除
 
 ```
-$ python regression.py --drop_if_not is_valid data.csv
+$ python regression.py --drop_if_not is_valid data.csv y
 ```
 
 #### 列
@@ -99,7 +107,7 @@ $ python regression.py --drop_if_not is_valid data.csv
 例: commentを削除
 
 ```
-$ python regression.py --exclude comment data.csv
+$ python regression.py --exclude comment data.csv y
 ```
 
 ## モデル
@@ -125,7 +133,7 @@ $ python regression.py --exclude comment data.csv
 --weight_inspectionを指定することで学習したモデルの重みを表示させます。
 
 ```
-$ python regression.py --weight_inspection data.csv
+$ python regression.py --weight_inspection data.csv y
 ```
 
 SigmoidUnit, SigmoidUnitLinearでは以下の追加のパラメータを指定できます。
@@ -165,7 +173,7 @@ SigmoidUnit, SigmoidUnitLinearでは以下の追加のパラメータを指定�
 例: result.csvに保存
 
 ```
-$ python regression.py --result result.csv data.csv
+$ python regression.py --result result.csv data.csv y
 ```
 
 ## 注意点

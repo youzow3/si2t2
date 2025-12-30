@@ -127,6 +127,15 @@ class TorchModel(Model):
         return t_y.cpu().numpy()
 
 
+class NoscaleDropout(nn.Dropout):
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+
+    def forward(self, x):
+        scaled = super().forward(x)
+        return scaled * (1 - self.p)
+
+
 class SigmoidUnit(nn.Module):
     def __init__(self, dim: int, a: float = None, bias: bool = True,
                  random: bool = False, sigmoid: str = None):
@@ -237,7 +246,7 @@ class SigmoidUnitModel(nn.Module):
                 a=1.0 if y_max is not None else None,
                 sigmoid=sigmoid)
         self.y_max: torch.Tensor = nn.Parameter(torch.empty([]))
-        self.dropout: nn.Dropout = nn.Dropout(dropout)
+        self.dropout: NoscaleDropout = NoscaleDropout(dropout)
 
         with torch.no_grad():
             if y_max is None:
@@ -269,7 +278,7 @@ class SigmoidUnitLinearModel(SigmoidUnitModel):
     def forward(self, x: torch.Tensor) -> torch.Tensor:
         assert isinstance(x, torch.Tensor)
         return self.y_max * (1 - torch.prod(
-                self.dropout(self.su(x) * F.sigmoid(self.sl(x), dim=-1)), dim=-1))
+                self.dropout(self.su(x) * F.sigmoid(self.sl(x))), dim=-1))
 
 
 def eval(model: Model, x: np.ndarray, y: np.ndarray

@@ -2,13 +2,19 @@
 
 1. python環境の構築 (推奨: venv)
 
-2. 依存関係のインストール
+2. リポジトリのダウンロード
+
+```
+$ git clone https://github.com/youzow3/si2t2.git
+```
+
+3. 依存関係のインストール
 
 ```
 $ pip install -r requirements.txt
 ```
 
-3. 実行
+4. 実行
 
 ```
 $ python regression.py [...]

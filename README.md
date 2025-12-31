@@ -176,6 +176,14 @@ SigmoidUnit, SigmoidUnitLinearでは以下の追加のパラメータを指定�
 $ python regression.py --result result.csv data.csv y
 ```
 
+--seedを用いて乱数の種を指定します。
+
+例: 42に設定
+
+```
+$ python regression.py --seed 42 data.csv y
+```
+
 ## 注意点
 
 - 入出力形式はcsvのみです。

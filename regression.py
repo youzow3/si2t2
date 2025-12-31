@@ -5,6 +5,7 @@ import torch.nn as nn
 import torch.nn.functional as F
 import pandas as pd
 import numpy as np
+import random
 
 from argparse import ArgumentParser, Namespace
 from typing import Any
@@ -15,6 +16,9 @@ class Model:
         raise NotImplementedError()
 
     def predict(self, x: np.ndarray) -> np.ndarray:
+        raise NotImplementedError()
+
+    def print_weight(self) -> None:
         raise NotImplementedError()
 
 
@@ -57,6 +61,12 @@ class LinearModel(Model):
     def predict(self, x: np.ndarray) -> np.ndarray:
         assert isinstance(x, np.ndarray)
         return self.model.predict(self.preprocess(x))
+
+    def print_weight(self) -> None:
+        print("coef:")
+        print(self.model.coef_)
+        print("intercept:")
+        print(self.model.intercept_)
 
 
 class TorchModel(Model):
@@ -125,6 +135,11 @@ class TorchModel(Model):
             t_y = self.model(t_x)
         assert isinstance(t_y, torch.Tensor)
         return t_y.cpu().numpy()
+
+    def print_weight(self) -> None:
+        for k, v in self.model.state_dict().items():
+            print(f"{k}:")
+            print(f"{v.cpu().numpy()}")
 
 
 class NoscaleDropout(nn.Dropout):
@@ -325,6 +340,11 @@ def main(args: Namespace) -> int:
     assert isinstance(args, Namespace)
     assert args.data is not None
 
+    if args.seed is not None:
+        torch.manual_seed(args.seed)
+        random.seed(args.seed)
+        np.random.seed(args.seed)
+
     """
     data in df should be:
     readme in_0, in_1, ... in_n, out
@@ -347,6 +367,7 @@ def main(args: Namespace) -> int:
             df_orig.drop(game)
 
     df_orig.dropna(subset=[args.y_data])
+    df_orig.fillna(0)
 
     # should replace appropriate name instead of "out"
     df_out: pd.Series = df_orig[args.y_data]
@@ -422,10 +443,7 @@ def main(args: Namespace) -> int:
         data_df.to_csv(args.result)
 
     if args.weight_inspection:
-        if isinstance(model, TorchModel):
-            for k, v in model.model.state_dict().items():
-                v_np: np.ndarray = v.cpu().numpy()
-                print(k, ": ", v_np)
+        model.print_weight()
 
     return 0
 
@@ -470,6 +488,7 @@ if __name__ == "__main__":
     parser.add_argument("--drop_if_not",
                         help="drop data if the specified col is FALSE",
                         action="append", type=str, default=None)
+    parser.add_argument("--seed", type=int, default=None)
     torch.set_default_device(torch.device("cuda") if torch.cuda.is_available() else torch.device("cpu"))
     exit(main(parser.parse_args()))
 

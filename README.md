@@ -60,6 +60,18 @@ $ python regression.py --embedding type1 --embedding type2 data.csv y
 $ python regression.py --test_size 0.5 data.csv y
 ```
 
+--kfoldを用いて交差検証を有効にします。なお、出力に関しては通常と変わらず、場合によっては表示可能な量を超過してしまう場合があるため、リダイレクトなどを用いて結果を確認できるようにするのをおすすめします。
+
+例: 5等分して検証、result.txtに標準出力の内容を保存
+
+```
+$ python regression.py --kfold 5 data.csv y | tee result.txt
+```
+
+>
+> リダイレクトはOS/シェル環境依存です。それぞれの環境で動く方法を用いてください。
+>
+
 ### 不要なデータの除去
 
 #### 行
@@ -149,6 +161,8 @@ SigmoidUnit, SigmoidUnitLinearでは以下の追加のパラメータを指定�
 --y_max: 予測モデルの出力の最大値
 
 --lr, --momentum: (加速度付き)確率的勾配降下法(SGD/SGDM)の学習率、加速度
+
+--beta1, --beta2: AdamWのbeta。指定された場合、オプティマイザーがSGDからAdamWに変更されます。
 
 --sigmoid: 活性化関数の指定
 

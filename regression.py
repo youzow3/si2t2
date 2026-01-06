@@ -47,7 +47,7 @@ class LinearModel(Model):
                 idx += 1
             else:
                 x_idx: np.ndarray = x[:, i].astype(np.int64)
-                expanded_x[:, idx + x_idx] = 1
+                expanded_x[:, idx + x_idx] = 1.0
                 idx += f
 
         return expanded_x
@@ -72,15 +72,19 @@ class LinearModel(Model):
 class TorchModel(Model):
     def __init__(self, model: nn.Module,
                  lr: float = 1.0, momentum: float = 0.0,
-                 gc_norm: float = None, gc_value: float = None):
+                 gc_norm: float = None, gc_value: float = None,
+                 beta1: float = None, beta2: float = None):
         assert isinstance(model, nn.Module)
 
         super().__init__()
         self.model: nn.Module = model
-        # May need to set lr manually
-        self.optimizer: torch.optim.Optimizer = torch.optim.SGD(
-                model.parameters(),
-                lr=lr, momentum=momentum)
+        self.optimizer: torch.optim.Optimizer
+        if beta1 is not None and beta2 is not None:
+            self.optimizer = torch.optim.AdamW(
+                    model.parameters(), lr=lr, betas=(beta1, beta2))
+        else:
+            self.optimizer: torch.optim.Optimizer = torch.optim.SGD(
+                    model.parameters(), lr=lr, momentum=momentum)
         self.scheduler = torch.optim.lr_scheduler.ReduceLROnPlateau(
                 self.optimizer)
         self.model.compile(mode="max-autotune")
@@ -272,8 +276,8 @@ class SigmoidUnitModel(nn.Module):
 
     def forward(self, x: torch.Tensor) -> torch.Tensor:
         assert isinstance(x, torch.Tensor)
-        return self.y_max * (1 - torch.prod(
-                self.dropout(self.su(self.mv(x))), dim=-1))
+        return self.y_max * torch.prod(self.dropout(
+            self.su(self.mv(x))), dim=-1)
 
 
 class SigmoidUnitLinearModel(SigmoidUnitModel):
@@ -292,8 +296,8 @@ class SigmoidUnitLinearModel(SigmoidUnitModel):
 
     def forward(self, x: torch.Tensor) -> torch.Tensor:
         assert isinstance(x, torch.Tensor)
-        return self.y_max * (1 - torch.prod(
-                self.dropout(self.su(x) * F.sigmoid(self.sl(x))), dim=-1))
+        return self.y_max * torch.prod(self.dropout(
+            self.su(self.mv(x)) * F.sigmoid(self.sl(self.mv(x)))), dim=-1)
 
 
 def eval(model: Model, x: np.ndarray, y: np.ndarray
@@ -364,7 +368,16 @@ def main(args: Namespace) -> int:
 
     if args.drop_game is not None:
         for game in args.drop_game:
-            df_orig.drop(game)
+            df_orig.drop(game, inplace=True)
+
+    if args.drop_if is not None:
+        for d in args.drop_if:
+            df_orig.drop(df_orig[df_orig[d] == 1].index, inplace=True)
+            df_orig.pop(d)
+    if args.drop_if_not is not None:
+        for d in args.drop_if_not:
+            df_orig.drop(df_orig[df_orig[d] == 0].index, inplace=True)
+            df_orig.pop(d)
 
     df_orig.dropna(subset=[args.y_data])
     df_orig.fillna(0)
@@ -381,28 +394,35 @@ def main(args: Namespace) -> int:
                     continue
                 df.drop(idx)
 
-    if args.drop_if is not None:
-        for d in args.drop_if:
-            df.drop(df[df[d] == 1].index)
-            df.pop(d)
-    if args.drop_if_not is not None:
-        for d in args.drop_if_not:
-            df.drop(df[df[d] == 0].index)
-            df.pop(d)
-
     print(df)
-    x_train_df, x_test_df, y_train_df, y_test_df = sklearn.model_selection.train_test_split(
-            df, df_out, test_size=args.test_size)
-    assert isinstance(x_train_df, pd.DataFrame)
-    assert isinstance(x_test_df, pd.DataFrame)
-    assert isinstance(y_train_df, pd.Series)
-    assert isinstance(y_test_df, pd.Series)
-    x_train: np.ndarray = x_train_df.to_numpy(dtype=np.float32)
-    x_test: np.ndarray = x_test_df.to_numpy(dtype=np.float32)
-    y_train: np.ndarray = y_train_df.to_numpy(dtype=np.float32)
-    y_test: np.ndarray = y_test_df.to_numpy(dtype=np.float32)
-    print(x_train)
-    print(y_train)
+
+    if args.kfold is None:
+        x_train_df, x_test_df, y_train_df, y_test_df = sklearn.model_selection.train_test_split(
+                df, df_out, test_size=args.test_size)
+        assert isinstance(x_train_df, pd.DataFrame)
+        assert isinstance(x_test_df, pd.DataFrame)
+        assert isinstance(y_train_df, pd.Series)
+        assert isinstance(y_test_df, pd.Series)
+        x_train: np.ndarray = [x_train_df.to_numpy(dtype=np.float32)]
+        x_test: np.ndarray = [x_test_df.to_numpy(dtype=np.float32)]
+        y_train: np.ndarray = [y_train_df.to_numpy(dtype=np.float32)]
+        y_test: np.ndarray = [y_test_df.to_numpy(dtype=np.float32)]
+        print(x_train)
+        print(y_train)
+    else:
+        kf = sklearn.model_selection.KFold(args.kfold, shuffle=True)
+        train_test: list[tuple[np.ndarray, np.ndarray]] = list(kf.split(df))
+        train: list[np.ndarray] = [t for t, _ in train_test]
+        test: list[np.ndarray] = [t for _, t in train_test]
+
+        x_train: list[np.ndarray] = [
+                df.iloc[idx].to_numpy(dtype=np.float32) for idx in train]
+        x_test: list[np.ndarray] = [
+                df.iloc[idx].to_numpy(dtype=np.float32) for idx in test]
+        y_train: list[np.ndarray] = [
+                df_out.iloc[idx].to_numpy(dtype=np.float32) for idx in train]
+        y_test: list[np.ndarray] = [
+                df_out.iloc[idx].to_numpy(dtype=np.float32) for idx in test]
 
     feature_in: list[int] = []
     for col in df.columns:
@@ -411,39 +431,42 @@ def main(args: Namespace) -> int:
         else:
             feature_in.append(0)
 
-    model: Model = None
-    if args.model_type == "Linear":
-        model = LinearModel(feature_in)
-    elif args.model_type == "SigmoidUnit":
-        model = TorchModel(
-                SigmoidUnitModel(
-                    feature_in, y_max=args.y_max,
-                    sigmoid=args.sigmoid, dropout=args.dropout),
-                lr=args.lr, momentum=args.momentum,
-                gc_norm=args.clip_grad_norm,
-                gc_value=args.clip_grad_value)
-    elif args.model_type == "SigmoidUnitLinear":
-        model = TorchModel(
-                SigmoidUnitLinearModel(
-                    feature_in, y_max=args.y_max,
-                    sigmoid=args.sigmoid, dropout=args.dropout),
-                lr=args.lr, momentum=args.momentum,
-                gc_norm=args.clip_grad_norm,
-                gc_value=args.clip_grad_value)
-    assert model is not None
+    for i, (x_train_, y_train_, x_test_, y_test_) in enumerate(zip(x_train, y_train, x_test, y_test)):
+        model: Model = None
+        if args.model_type == "Linear":
+            model = LinearModel(feature_in)
+        elif args.model_type == "SigmoidUnit":
+            model = TorchModel(
+                    SigmoidUnitModel(
+                        feature_in, y_max=args.y_max,
+                        sigmoid=args.sigmoid, dropout=args.dropout),
+                    lr=args.lr, momentum=args.momentum,
+                    gc_norm=args.clip_grad_norm,
+                    gc_value=args.clip_grad_value,
+                    beta1=args.beta1, beta2=args.beta2)
+        elif args.model_type == "SigmoidUnitLinear":
+            model = TorchModel(
+                    SigmoidUnitLinearModel(
+                        feature_in, y_max=args.y_max,
+                        sigmoid=args.sigmoid, dropout=args.dropout),
+                    lr=args.lr, momentum=args.momentum,
+                    gc_norm=args.clip_grad_norm,
+                    gc_value=args.clip_grad_value,
+                    beta1=args.beta1, beta2=args.beta2)
+        assert model is not None
 
-    model.train(x_train, y_train)
-    print_eval_result(eval(model, x_train, y_train), "train")
-    print_eval_result(eval(model, x_test, y_test), "test")
+        model.train(x_train_, y_train_)
+        print_eval_result(eval(model, x_train_, y_train_), "train")
+        print_eval_result(eval(model, x_test_, y_test_), "test")
 
-    if args.result is not None:
-        data: np.ndarray = model.predict(df.to_numpy(np.float32))
-        data_df: pd.DataFrame = df_orig
-        data_df["predict"] = data
-        data_df.to_csv(args.result)
+        if args.result is not None:
+            data: np.ndarray = model.predict(df.to_numpy(np.float32))
+            data_df: pd.DataFrame = df_orig
+            data_df["predict"] = data
+            data_df.to_csv(f"{i}-{args.result}")
 
-    if args.weight_inspection:
-        model.print_weight()
+        if args.weight_inspection:
+            model.print_weight()
 
     return 0
 
@@ -489,6 +512,13 @@ if __name__ == "__main__":
                         help="drop data if the specified col is FALSE",
                         action="append", type=str, default=None)
     parser.add_argument("--seed", type=int, default=None)
+    parser.add_argument("--kfold",
+                        help="Cross validation instead of one test-train split",
+                        type=int, default=None)
+    parser.add_argument("--beta1", help="beta1 for AdamW",
+                        type=float, default=None)
+    parser.add_argument("--beta2", help="beta1 for AdamW",
+                        type=float, default=None)
     torch.set_default_device(torch.device("cuda") if torch.cuda.is_available() else torch.device("cpu"))
     exit(main(parser.parse_args()))
 

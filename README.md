@@ -8,13 +8,19 @@
 $ git clone https://github.com/youzow3/si2t2.git
 ```
 
-3. 依存関係のインストール
+3. ディレクトリの移動
+
+```
+$ cd si2t2
+```
+
+4. 依存関係のインストール
 
 ```
 $ pip install -r requirements.txt
 ```
 
-4. 実行
+5. 実行
 
 ```
 $ python regression.py [...]

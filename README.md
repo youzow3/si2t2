@@ -1,4 +1,14 @@
-## 使い方
+# regression.py
+
+与えられたデータを用いて回帰します。
+
+例: data.csvを用いて列"y"を予測するモデルを作る。
+
+```
+$ python regression.py data.csv y
+```
+
+## 使い方と推奨環境
 
 1. python環境の構築 (推奨: venv)
 
@@ -26,15 +36,35 @@ $ pip install -r requirements.txt
 $ python regression.py [...]
 ```
 
-# regression.py
+推奨環境はWSLもしくはLinux実機でpython/venvを用いる環境になります。
 
-与えられたデータを用いて回帰します。
+### venvの作成と有効化
 
-例: data.csvを用いて列"y"を予測するモデルを作る。
+.venvというディレクトリ名でvenvを作成
 
 ```
-$ python regression.py data.csv y
+$ python -m venv .venv
 ```
+
+venvを有効化する
+
+```
+$ . .venv/bin/activate
+```
+
+venvを無効化する(退出する)
+
+```
+$ deactivate
+```
+
+>
+> OSによってはvenvがデフォルトのpythonパッケージに含まれていない場合があります。
+>
+
+>
+> 動作確認環境はArchLinux実機 6.18.3, Python3 3.13.11
+>
 
 ## カテゴリカルデータ
 
@@ -160,6 +190,18 @@ $ python regression.py --exclude comment data.csv y
 $ python regression.py --weight_inspection data.csv y
 ```
 
+--weight_inspection_v2を指定することでcsvファイルに重みを書き出すことができます。
+
+例: 接尾がinspection.csvとなるファイルに重み情報を書き出す。
+
+```
+$ python regression.py --weight_inspection_v2 inspection.csv data.csv y
+```
+
+>
+> 例えば、LinearRegressionを用いる場合はcoef-inspection.csvとintercept-inspection.csvが生成されます。
+>
+
 SigmoidUnit, SigmoidUnitLinearでは以下の追加のパラメータを指定できます。
 
 --y_max, --lr, --momentum --sigmoid, --dropout, --clip_grad_norm, --clip_grad_value
@@ -200,6 +242,14 @@ SigmoidUnit, SigmoidUnitLinearでは以下の追加のパラメータを指定�
 
 ```
 $ python regression.py --result result.csv data.csv y
+```
+
+同様に--result_train, --result_testを用いることで、学習データのみ・テストデータのみに対して予測値の列を追加したcsvファイルを返します。
+
+例: テストデータについて、result_test.csvに保存
+
+```
+$ python regression.py --result_test result_test.csv data.csv y
 ```
 
 --seedを用いて乱数の種を指定します。

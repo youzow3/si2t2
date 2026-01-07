@@ -21,6 +21,9 @@ class Model:
     def print_weight(self) -> None:
         raise NotImplementedError()
 
+    def get_weight(self) -> dict[str, np.ndarray]:
+        raise NotImplementedError()
+
 
 class LinearModel(Model):
     def __init__(self, feature_in: list[int]):
@@ -67,6 +70,10 @@ class LinearModel(Model):
         print(self.model.coef_)
         print("intercept:")
         print(self.model.intercept_)
+
+    def get_weight(self) -> dict[str, np.ndarray]:
+        return {"coef": self.model.coef_,
+                "intercept": self.model.intercept_}
 
 
 class TorchModel(Model):
@@ -145,6 +152,9 @@ class TorchModel(Model):
             print(f"{k}:")
             print(f"{v.cpu().numpy()}")
 
+    def get_weight(self) -> dict[str, np.ndarray]:
+        return {k: v.cpu().numpy() for k, v in self.model.state_dict().items()}
+
 
 class NoscaleDropout(nn.Dropout):
     def __init__(self, *args, **kwargs):
@@ -206,7 +216,8 @@ class SigmoidUnit(nn.Module):
                 if a is None:
                     self.a = None
                 else:
-                    self.a.fill_(a)
+                    # self.a.fill_(a)  # This should not be happened.
+                    self.a.uniform_(a / 2, 3 * a / 2)
                 self.weight.fill_(1)
                 self.bias.zero_()
 
@@ -426,6 +437,7 @@ def main(args: Namespace) -> int:
         else:
             feature_in.append(0)
 
+    weights: list[dict[str, np.ndarray]] = []
     for i, (x_train_, y_train_, x_test_, y_test_) in enumerate(zip(x_train, y_train, x_test, y_test)):
         model: Model = None
         if args.model_type == "Linear":
@@ -466,16 +478,41 @@ def main(args: Namespace) -> int:
         if args.result_train is not None:
             data: np.ndarray = model.predict(x_train__)
             data_df: pd.DataFrame = x_train_
+            data_df["acutal"] = y_train_
             data_df["predict"] = data
             data_df.to_csv(f"{i}-{args.result_train}")
         if args.result_test is not None:
             data: np.ndarray = model.predict(x_test__)
             data_df: pd.DataFrame = x_test_
+            data_df["actual"] = y_test_
             data_df["predict"] = data
             data_df.to_csv(f"{i}-{args.result_test}")
 
         if args.weight_inspection:
             model.print_weight()
+        weights.append(model.get_weight())
+
+    if args.weight_inspection_v2 is not None:
+        index: list[str] = [f"{i}" for i in range(len(weights))]
+        key: list[str] = [k for k, _ in weights[0].items()]
+        for k in key:
+            for i in range(len(weights)):
+                if weights[0][k].ndim == 0:
+                    break
+                if weights[i][k].shape[-1] == 1:
+                    weights[i][k] = weights[i][k].squeeze(-1)
+
+            if weights[0][k].ndim >= 2:
+                print(f"Skipping weight for {k}")
+                continue
+            col: list[str] = ['0']
+            if weights[0][k].ndim == 1:
+                col = [f"{i}" for i in range(weights[0][k].shape[0])]
+
+            weight_df: pd.DataFrame = pd.DataFrame(
+                    np.array([weights[i][k] if weights[i][k].ndim > 0 else np.expand_dims(weights[i][k], 0) for i in range(len(weights))])
+                    , index, col)
+            weight_df.to_csv(f"{k}-{args.weight_inspection_v2}")
 
     return 0
 
@@ -518,6 +555,8 @@ if __name__ == "__main__":
                         help="value for gradient clipping", default=None)
     parser.add_argument("--weight_inspection",
                         help="", default=None, action="store_true")
+    parser.add_argument("--weight_inspection_v2",
+                        type=str, help="", default=None)
     parser.add_argument("--drop_game", help="don't consider specific game",
                         action="append", type=str, default=None)
     parser.add_argument("--drop_if",

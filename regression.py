@@ -396,33 +396,28 @@ def main(args: Namespace) -> int:
 
     print(df)
 
+    x_train: list[pd.DataFrame] = None
+    x_test: list[pd.DataFrame] = None
+    y_train: list[pd.Series] = None
+    y_test: list[pd.Series] = None
     if args.kfold is None:
-        x_train_df, x_test_df, y_train_df, y_test_df = sklearn.model_selection.train_test_split(
+        x_train_, x_test_, y_train_, y_test_ = sklearn.model_selection.train_test_split(
                 df, df_out, test_size=args.test_size)
-        assert isinstance(x_train_df, pd.DataFrame)
-        assert isinstance(x_test_df, pd.DataFrame)
-        assert isinstance(y_train_df, pd.Series)
-        assert isinstance(y_test_df, pd.Series)
-        x_train: np.ndarray = [x_train_df.to_numpy(dtype=np.float32)]
-        x_test: np.ndarray = [x_test_df.to_numpy(dtype=np.float32)]
-        y_train: np.ndarray = [y_train_df.to_numpy(dtype=np.float32)]
-        y_test: np.ndarray = [y_test_df.to_numpy(dtype=np.float32)]
-        print(x_train)
-        print(y_train)
+        x_train, x_test, y_train, y_test = [x_train_], [x_test_], [y_train_], [y_test_]
     else:
         kf = sklearn.model_selection.KFold(args.kfold, shuffle=True)
         train_test: list[tuple[np.ndarray, np.ndarray]] = list(kf.split(df))
         train: list[np.ndarray] = [t for t, _ in train_test]
         test: list[np.ndarray] = [t for _, t in train_test]
 
-        x_train: list[np.ndarray] = [
-                df.iloc[idx].to_numpy(dtype=np.float32) for idx in train]
-        x_test: list[np.ndarray] = [
-                df.iloc[idx].to_numpy(dtype=np.float32) for idx in test]
-        y_train: list[np.ndarray] = [
-                df_out.iloc[idx].to_numpy(dtype=np.float32) for idx in train]
-        y_test: list[np.ndarray] = [
-                df_out.iloc[idx].to_numpy(dtype=np.float32) for idx in test]
+        x_train = [df.iloc[idx] for idx in train]
+        x_test = [df.iloc[idx] for idx in test]
+        y_train = [df_out.iloc[idx] for idx in train]
+        y_test = [df_out.iloc[idx] for idx in test]
+    assert isinstance(x_train, list)
+    assert isinstance(x_test, list)
+    assert isinstance(y_train, list)
+    assert isinstance(y_test, list)
 
     feature_in: list[int] = []
     for col in df.columns:
@@ -455,15 +450,29 @@ def main(args: Namespace) -> int:
                     beta1=args.beta1, beta2=args.beta2)
         assert model is not None
 
-        model.train(x_train_, y_train_)
-        print_eval_result(eval(model, x_train_, y_train_), "train")
-        print_eval_result(eval(model, x_test_, y_test_), "test")
+        x_train__: np.ndarray = x_train_.to_numpy(np.float32)
+        y_train__: np.ndarray = y_train_.to_numpy(np.float32)
+        x_test__: np.ndarray = x_test_.to_numpy(np.float32)
+        y_test__: np.ndarray = y_test_.to_numpy(np.float32)
+        model.train(x_train__, y_train__)
+        print_eval_result(eval(model, x_train__, y_train__), "train")
+        print_eval_result(eval(model, x_test__, y_test__), "test")
 
         if args.result is not None:
             data: np.ndarray = model.predict(df.to_numpy(np.float32))
             data_df: pd.DataFrame = df_orig
             data_df["predict"] = data
             data_df.to_csv(f"{i}-{args.result}")
+        if args.result_train is not None:
+            data: np.ndarray = model.predict(x_train__)
+            data_df: pd.DataFrame = x_train_
+            data_df["predict"] = data
+            data_df.to_csv(f"{i}-{args.result_train}")
+        if args.result_test is not None:
+            data: np.ndarray = model.predict(x_test__)
+            data_df: pd.DataFrame = x_test_
+            data_df["predict"] = data
+            data_df.to_csv(f"{i}-{args.result_test}")
 
         if args.weight_inspection:
             model.print_weight()
@@ -497,6 +506,12 @@ if __name__ == "__main__":
                         help="dropout for NN based model", default=0.0)
     parser.add_argument("--result", type=str,
                         help="file name to save result", default=None)
+    parser.add_argument("--result_train", type=str,
+                        help="file name to save result for training data",
+                        default=None)
+    parser.add_argument("--result_test", type=str,
+                        help="file name to save result for test data",
+                        default=None)
     parser.add_argument("--clip_grad_norm", type=float,
                         help="value for gradient clipping", default=None)
     parser.add_argument("--clip_grad_value", type=float,

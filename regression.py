@@ -412,9 +412,15 @@ def main(args: Namespace) -> int:
     y_train: list[pd.Series] = None
     y_test: list[pd.Series] = None
     if args.kfold is None:
-        x_train_, x_test_, y_train_, y_test_ = sklearn.model_selection.train_test_split(
-                df, df_out, test_size=args.test_size)
-        x_train, x_test, y_train, y_test = [x_train_], [x_test_], [y_train_], [y_test_]
+        if args.test_size == 0:
+            x_train = [df]
+            y_train = [df_out]
+            x_test = [None]
+            y_test = [None]
+        else:
+            x_train_, x_test_, y_train_, y_test_ = sklearn.model_selection.train_test_split(
+                    df, df_out, test_size=args.test_size)
+            x_train, x_test, y_train, y_test = [x_train_], [x_test_], [y_train_], [y_test_]
     else:
         kf = sklearn.model_selection.KFold(args.kfold, shuffle=True)
         train_test: list[tuple[np.ndarray, np.ndarray]] = list(kf.split(df))
@@ -438,6 +444,8 @@ def main(args: Namespace) -> int:
             feature_in.append(0)
 
     weights: list[dict[str, np.ndarray]] = []
+    train_evals: list[tuple[float, float, float, float]] = []
+    test_evals: list[tuple[float, float, float, float]] = []
     for i, (x_train_, y_train_, x_test_, y_test_) in enumerate(zip(x_train, y_train, x_test, y_test)):
         model: Model = None
         if args.model_type == "Linear":
@@ -464,11 +472,22 @@ def main(args: Namespace) -> int:
 
         x_train__: np.ndarray = x_train_.to_numpy(np.float32)
         y_train__: np.ndarray = y_train_.to_numpy(np.float32)
-        x_test__: np.ndarray = x_test_.to_numpy(np.float32)
-        y_test__: np.ndarray = y_test_.to_numpy(np.float32)
         model.train(x_train__, y_train__)
-        print_eval_result(eval(model, x_train__, y_train__), "train")
-        print_eval_result(eval(model, x_test__, y_test__), "test")
+        train_evals.append(eval(model, x_train__, y_train__))
+        print_eval_result(train_evals[-1], "train")
+
+        if x_test_ is not None:
+            x_test__: np.ndarray = x_test_.to_numpy(np.float32)
+            y_test__: np.ndarray = y_test_.to_numpy(np.float32)
+            test_evals.append(eval(model, x_test__, y_test__))
+            print_eval_result(test_evals[-1], "test")
+
+            if args.result_test is not None:
+                data: np.ndarray = model.predict(x_test__)
+                data_df: pd.DataFrame = x_test_
+                data_df["actual"] = y_test_
+                data_df["predict"] = data
+                data_df.to_csv(f"{i}-{args.result_test}")
 
         if args.result is not None:
             data: np.ndarray = model.predict(df.to_numpy(np.float32))
@@ -481,12 +500,6 @@ def main(args: Namespace) -> int:
             data_df["acutal"] = y_train_
             data_df["predict"] = data
             data_df.to_csv(f"{i}-{args.result_train}")
-        if args.result_test is not None:
-            data: np.ndarray = model.predict(x_test__)
-            data_df: pd.DataFrame = x_test_
-            data_df["actual"] = y_test_
-            data_df["predict"] = data
-            data_df.to_csv(f"{i}-{args.result_test}")
 
         if args.weight_inspection:
             model.print_weight()
@@ -513,6 +526,11 @@ def main(args: Namespace) -> int:
                     np.array([weights[i][k] if weights[i][k].ndim > 0 else np.expand_dims(weights[i][k], 0) for i in range(len(weights))])
                     , index, col)
             weight_df.to_csv(f"{k}-{args.weight_inspection_v2}")
+
+    if len(train_evals) > 1:
+        print_eval_result(np.mean(train_evals, axis=0), "train-mean")
+    if len(test_evals) > 1:
+        print_eval_result(np.mean(test_evals, axis=0), "test-mean")
 
     return 0
 

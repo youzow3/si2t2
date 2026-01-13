@@ -166,11 +166,7 @@ $ python regression.py --exclude comment data.csv y
 
 ## モデル
 
---model_typeで使用するモデルを指定できます。以下の3つを選ぶことができます。
-
-- Linear
-
-    線形回帰
+--model_typeで使用するモデルを指定できます。以下の2つを選ぶことができます。
 
 - SigmoidUnit
 

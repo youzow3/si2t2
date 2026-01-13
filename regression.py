@@ -449,7 +449,8 @@ def main(args: Namespace) -> int:
     for i, (x_train_, y_train_, x_test_, y_test_) in enumerate(zip(x_train, y_train, x_test, y_test)):
         model: Model = None
         if args.model_type == "Linear":
-            model = LinearModel(feature_in)
+            pass
+            # model = LinearModel(feature_in)
         elif args.model_type == "SigmoidUnit":
             model = TorchModel(
                     SigmoidUnitModel(
